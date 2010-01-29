@@ -7,6 +7,8 @@ class RestClient {
   private $lastError = FALSE;
   public $rawResponse;
   public $lastResponse;
+  // Allows specification of additional custom curl options.
+  public $curlOpts = array();
 
   /**
    * Creates a Rest client
@@ -117,6 +119,9 @@ class RestClient {
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $req->getMethod());
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($ch, CURLOPT_URL, $req->toUrl());
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Drupal (+http://drupal.org/)');
+    curl_setopt_array($ch, $this->curlOpts);
+
     if ($req->hasData()) {
       curl_setopt($ch, CURLOPT_POSTFIELDS, $req->getData());
     }
