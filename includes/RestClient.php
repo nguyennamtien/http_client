@@ -152,7 +152,11 @@ class RestClient {
   }
 
   private function interpretResponse($res) {
-    list($headers, $body) = preg_split('/\r\n\r\n/', $res, 2);
+    $split = preg_split('/\r\n\r\n/', $res, 2);
+    if (!isset($split[1])) {
+      throw new Exception('Error interpeting response: ' . check_plain($res));
+    }
+    list($headers, $body) = $split;
 
     $obj = (object)array(
       'headers' => $headers,
