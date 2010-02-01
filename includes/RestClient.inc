@@ -1,21 +1,29 @@
 <?php
 
+/**
+ * A rest client.
+ */
 class RestClient {
+
   protected $authentication = NULL;
   protected $request_alter = NULL;
   protected $formatter = NULL;
   protected $lastError = FALSE;
+
   public $rawResponse;
   public $lastResponse;
-  // Allows specification of additional custom curl options.
+
+  /**
+   * Allows specification of additional custom curl options.
+   */
   public $curlOpts = array();
+
 
   /**
    * Creates a Rest client
    *
    * @param string $authentication
    * @param string $request_alter
-   * @param string $unserialize
    * @author Hugo Wetterberg
    */
   public function __construct($authentication = NULL, $formatter = NULL, $request_alter = NULL) {
@@ -39,10 +47,9 @@ class RestClient {
 
   /**
    * Inject authentication class
-   * @param RestClientAuthentication $auth
-   *   The class to use for authentication. Must implement RestClientAuthentication
    *
-   * @return void
+   * @param RestClientAuthentication $auth
+   *   The class to use for authentication.
    */
   public function setAuthentication(RestClientAuthentication $auth) {
     $this->authentication = $auth;
@@ -50,115 +57,129 @@ class RestClient {
 
   /**
    * Inject formatter class
-   * @param RestClientFormatter $formatter
-   *   The class to use for formatting. Must implement RestClientFormatter
    *
-   * @return void
+   * @param RestClientFormatter $formatter
+   *   The class to use for formatting.
    */
   public function setFormatter(RestClientFormatter $formatter) {
     $this->formatter = $formatter;
   }
 
-  public function get($url, $parameters) {
-    $ch = $this->curl($url, $parameters, 'GET');
-    return $this->execute($ch);
-  }
-
-  public function post($url, $data, $parameters=array()) {
-    $ch = $this->curl($url, $parameters, 'POST', $data);
-    return $this->execute($ch);
-  }
-
-  public function put($url, $data, $parameters=array()) {
-    $ch = $this->curl($url, $parameters, 'PUT', $data);
-    return $this->execute($ch);
-  }
-
-  public function delete($url, $parameters=array()) {
-    $ch = $this->curl($url, $parameters, 'DELETE');
-    return $this->execute($ch);
-  }
-
-  public function postFile($url, $file, $mime, $parameters=array()) {
-    $contents = file_get_contents($file);
-    $ch = $this->curlRaw($url, $parameters, 'POST', $contents, $mime, array(
-      'Content-disposition: inline; filename="' . addslashes(basename($file)) . '"',
-    ));
-    return $this->execute($ch);
-  }
-
-  public function curl($url, $parameters, $method, $data = NULL, $content_type='application/vnd.php.serialized', $extra_headers=array()) {
-    $ch = curl_init();
-
-    if ($this->formatter && $data) {
-      $data = $this->formatter->serialize($data);
-    }
-
-    $req = new RestClientRequest(array(
-      'method' => $method,
-      'url' => $url,
+  /**
+   * Executes a GET request.
+   */
+  public function get($url, $parameters = array()) {
+    return $this->execute(new RestClientRequest($url, array(
+      'method' =>  'GET',
       'parameters' => $parameters,
-      'data' => $data,
-    ));
-    if ($data) {
-      //$req->setHeader('Content-type', $content_type);
-      $req->setHeader('Content-length', strlen($data));
+    )));
+  }
+
+  /**
+   * Executes a POST request.
+   */
+  public function post($url, $data = NULL, $parameters = array()) {
+    return $this->execute(new RestClientRequest($url, array(
+      'method' =>  'POST',
+      'parameters' => $parameters,
+      'data' => $data
+    )));
+  }
+
+  /**
+   * Executes a PUT request.
+   */
+  public function put($url, $data = NULL, $parameters = array()) {
+    return $this->execute(new RestClientRequest($url, array(
+      'method' =>  'PUT',
+      'parameters' => $parameters,
+      'data' => $data
+    )));
+  }
+
+  /**
+   * Executes a DELETE request.
+   */
+  public function delete($url, $parameters = array()) {
+    return $this->execute(new RestClientRequest($url, array(
+      'method' =>  'DELETE',
+      'parameters' => $parameters,
+    )));
+  }
+
+  /**
+   * Gets a curl handle for the given request.
+   */
+  public function curl(RestClientRequest $request) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_HEADER, 1);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $request->method);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_URL, $request->url());
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Drupal (+http://drupal.org/)');
+
+    if (isset($request->data)) {
+      if ($this->formatter) {
+        $this->header['Content-type'] = $this->formatter->mimeType();
+        $data = $this->formatter->serialize($request->data);
+      }
+      else {
+        $data = (string)$request->data;
+      }
+      curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+      $this->header['Content-length'] = strlen($data);
     }
 
+    curl_setopt_array($ch, $request->curlOpts + $this->curlOpts);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $request->headers);
+    return $ch;
+  }
+
+  /**
+   * Executes the given request.
+   */
+  public function execute(RestClientRequest $request) {
     // Allow the request to be altered
     if ($this->request_alter) {
-      $this->request_alter->alterRequest($req);
+      $this->request_alter->alterRequest($request);
     }
 
     // Allow the authentication implementation to do it's magic
     if ($this->authentication) {
-      $this->authentication->authenticate($req);
+      $this->authentication->authenticate($request);
     }
 
-    curl_setopt($ch, CURLOPT_HEADER, 1);
-    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $req->getMethod());
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_URL, $req->toUrl());
-    curl_setopt($ch, CURLOPT_USERAGENT, 'Drupal (+http://drupal.org/)');
-    curl_setopt_array($ch, $this->curlOpts);
-
-    if ($req->hasData()) {
-      curl_setopt($ch, CURLOPT_POSTFIELDS, $req->getData());
-    }
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array_merge($req->getHeaders(), $extra_headers));
-    return $ch;
-  }
-
-  public function execute($ch, $unserialize = TRUE) {
+    $ch = $this->curl($request);
     $this->rawResponse = curl_exec($ch);
-    $res = $this->interpretResponse($this->rawResponse);
-    $this->lastResponse = $res;
+    $response = $this->interpretResponse($this->rawResponse);
+    $this->lastResponse = $response;
     $this->lastError = curl_error($ch);
     curl_close($ch);
 
-    if ($res->responseCode==200) {
+    if ($response->responseCode==200) {
       if ($this->formatter) {
-        return $this->formatter->unserialize($res->body);
+        return $this->formatter->unserialize($response->body);
       }
-      return $res->body;
+      return $response->body;
     }
-    else {
-      // A curl error occured.
-      if (empty($res->rawResponse) && !empty($this->lastError)) {
-        throw new Exception('Curl Error: ' . $this->lastError);
-      }
-      // Output any errors set by remote drupal sites.
-      elseif (!empty($res->drupalErrors)) {
-        throw new Exception(check_plain(implode("\n", $res->drupalErrors)), $res->responseCode);
-      }
-      throw new Exception(check_plain($res->responseMessage), $res->responseCode);
+    // Deal with errors.
+    if (empty($response->rawResponse) && !empty($this->lastError)) {
+      throw new Exception('Curl Error: ' . $this->lastError);
     }
+    // Output any errors set by remote drupal sites.
+    elseif (!empty($response->drupalErrors)) {
+      throw new Exception(check_plain(implode("\n", $response->drupalErrors)), $response->responseCode);
+    }
+    throw new Exception(check_plain($response->responseMessage), $response->responseCode);
   }
 
-  protected function interpretResponse($res) {
-    $split = preg_split('/\r\n\r\n/', $res, 2);
+  /**
+   * Interprets the response.
+   */
+  protected function interpretResponse($response) {
+    $split = preg_split('/\r\n\r\n/', $response, 2);
     if (!isset($split[1])) {
-      throw new Exception('Error interpeting response: ' . check_plain($res));
+      throw new Exception('Error interpreting response: ' . check_plain($response));
     }
     list($headers, $body) = $split;
 
@@ -166,7 +187,7 @@ class RestClient {
       'headers' => $headers,
       'body' => $body,
     );
-    
+
     // Drupal sends errors are via X-Drupal-Assertion-* headers,
     // generated by _drupal_log_error(). Read them to ease debugging.
     if (preg_match_all('/X-Drupal-Assertion-[0-9]+: (.*)\n/', $headers, $matches)) {
@@ -174,18 +195,16 @@ class RestClient {
         $obj->drupalErrors[] = print_r(unserialize(urldecode($match)), 1);
       }
     }
-
     $matches = array();
     if (preg_match('/HTTP\/1.\d (\d{3}) (.*)/', $headers, $matches)) {
       $obj->responseCode = trim($matches[1]);
       $obj->responseMessage = trim($matches[2]);
 
       // Handle HTTP/1.1 100 Continue
-      if ($obj->responseCode==100) {
+      if ($obj->responseCode == 100) {
         return $this->interpretResponse($body);
       }
     }
-
     return $obj;
   }
 
@@ -205,27 +224,24 @@ class RestClient {
       return '';
     }
   }
-
-  /**
-   * Check for curl error
-   * Returns FALSE if no error occured
-   */
-  public function getCurlError() {
-    if (empty($this->lastError)) {
-      $this->lastError = FALSE;
-    }
-    return $this->lastError;
-  }
-
 }
 
+/**
+ * A base formatter to format php and json.
+ */
 class RestClientBaseFormatter implements RestClientFormatter {
+
   const FORMAT_PHP = 'php';
   const FORMAT_JSON = 'json';
 
+  protected $mimeTypes = array(
+    self::FORMAT_PHP => 'application/vnd.php.serialized',
+    self::FORMAT_JSON => 'application/json',
+  );
+
   protected $format;
 
-  public function __construct($format=self::FORMAT_PHP) {
+  public function __construct($format = self::FORMAT_PHP) {
     $this->format = $format;
   }
 
@@ -259,8 +275,8 @@ class RestClientBaseFormatter implements RestClientFormatter {
   public function unserialize($data) {
     switch($this->format) {
       case self::FORMAT_PHP:
-        if (($res = @unserialize($data))!==FALSE || $data === serialize(FALSE)) {
-          return $res;
+        if (($response = @unserialize($data))!==FALSE || $data === serialize(FALSE)) {
+          return $response;
         }
         else {
           throw new Exception(t('Unserialization of response body failed.'), 1);
@@ -270,6 +286,13 @@ class RestClientBaseFormatter implements RestClientFormatter {
         return json_decode($data);
         break;
     }
+  }
+
+  /**
+   * Returns the mime type to use.
+   */
+  public function mimeType() {
+    return $this->mimeTypes[$this->format];
   }
 }
 
@@ -296,6 +319,11 @@ interface RestClientFormatter {
    *  The unserialized data.
    */
   public function unserialize($data);
+
+  /**
+   * Return the mime type to use.
+   */
+  public function mimeType();
 }
 
 /**
@@ -310,4 +338,65 @@ interface RestClientAuthentication {
    * @return void
    */
   public function authenticate($request);
+}
+
+/**
+ * This is a convenience class that allows the manipulation of a http request
+ * before it's handed over to curl.
+ */
+class RestClientRequest {
+
+  const METHOD_GET = 'GET';
+  const METHOD_POST = 'POST';
+  const METHOD_PUT = 'PUT';
+  const METHOD_DELETE = 'DELETE';
+
+  public $method = self::METHOD_GET;
+  public $url = '';
+  public $parameters = array();
+  public $headers = array();
+  public $data = NULL;
+
+  /**
+   * Allows specification of additional custom curl options.
+   */
+  public $curlOpts = array();
+
+  /**
+   * Construct a new client request.
+   *
+   * @param $url
+   *   The url to send the request to.
+   * @param $values
+   *   An array of values for the object properties to set for the request.
+   */
+  public function __construct($url, $values = array()) {
+    $this->url = $url;
+    foreach (get_object_vars($this) as $key => $value) {
+      if (isset($values[$key])) {
+        $this->$key = $values[$key];
+      }
+    }
+  }
+
+  /**
+   * Returns the url taken the parameters into account.
+   */
+  public function url() {
+    if (empty($this->parameters)) {
+      return $this->url;
+    }
+    $total = array();
+    foreach ($this->parameters as $k => $v) {
+      if (is_array($v)) {
+        foreach ($v as $va) {
+          $total[] = RestClient::urlencode_rfc3986($k) . "[]=" . RestClient::urlencode_rfc3986($va);
+        }
+      } else {
+        $total[] = RestClient::urlencode_rfc3986($k) . "=" . RestClient::urlencode_rfc3986($v);
+      }
+    }
+    $out = implode("&", $total);
+    return $this->url . '?' . $out;
+  }
 }

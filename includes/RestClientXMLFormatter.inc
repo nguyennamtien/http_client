@@ -47,6 +47,9 @@ class RestClientXMLFormatter implements RestClientFormatter {
     }
   }
 
+  public function mimeType() {
+    return 'application/xml';
+  }
 
   /**
    * Directly stolen from rest_server by Hugo Wetterberg
