@@ -120,14 +120,14 @@ class RestClient {
 
     if (isset($request->data)) {
       if ($this->formatter) {
-        $this->header['Content-type'] = $this->formatter->mimeType();
+        $request->headers[] = 'Content-type: ' . $this->formatter->mimeType();
         $data = $this->formatter->serialize($request->data);
       }
       else {
         $data = (string)$request->data;
       }
       curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-      $this->header['Content-length'] = strlen($data);
+      $request->headers[] = 'Content-length: '. strlen($data);
     }
 
     curl_setopt_array($ch, $request->curlOpts + $this->curlOpts);
