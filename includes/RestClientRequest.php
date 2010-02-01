@@ -11,11 +11,11 @@ class RestClientRequest {
   const METHOD_PUT = 'PUT';
   const METHOD_DELETE = 'DELETE';
 
-  private $method = self::METHOD_GET;
-  private $url = '';
-  private $parameters = array();
-  private $headers = array();
-  private $data = NULL;
+  protected $method = self::METHOD_GET;
+  protected $url = '';
+  protected $parameters = array();
+  protected $headers = array();
+  protected $data = NULL;
 
   public function __construct($kw=array()) {
     $kwaccept = array('method', 'url', 'parameters', 'data');

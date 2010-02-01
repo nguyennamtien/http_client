@@ -1,10 +1,10 @@
 <?php
 
 class RestClient {
-  private $authentication = NULL;
-  private $request_alter = NULL;
-  private $formatter = NULL;
-  private $lastError = FALSE;
+  protected $authentication = NULL;
+  protected $request_alter = NULL;
+  protected $formatter = NULL;
+  protected $lastError = FALSE;
   public $rawResponse;
   public $lastResponse;
   // Allows specification of additional custom curl options.
@@ -18,7 +18,7 @@ class RestClient {
    * @param string $unserialize
    * @author Hugo Wetterberg
    */
-  public function __construct($authentication=NULL, $formatter=NULL, $request_alter=NULL) {
+  public function __construct($authentication = NULL, $formatter = NULL, $request_alter = NULL) {
     $this->authentication = $authentication;
     $this->formatter = $formatter;
 
@@ -87,7 +87,7 @@ class RestClient {
     return $this->execute($ch);
   }
 
-  public function curl($url, $parameters, $method, $data=NULL, $content_type='application/vnd.php.serialized', $extra_headers=array()) {
+  public function curl($url, $parameters, $method, $data = NULL, $content_type='application/vnd.php.serialized', $extra_headers=array()) {
     $ch = curl_init();
 
     if ($this->formatter && $data) {
@@ -101,7 +101,7 @@ class RestClient {
       'data' => $data,
     ));
     if ($data) {
-      $req->setHeader('Content-type', $content_type);
+      //$req->setHeader('Content-type', $content_type);
       $req->setHeader('Content-length', strlen($data));
     }
 
@@ -155,7 +155,7 @@ class RestClient {
     }
   }
 
-  private function interpretResponse($res) {
+  protected function interpretResponse($res) {
     $split = preg_split('/\r\n\r\n/', $res, 2);
     if (!isset($split[1])) {
       throw new Exception('Error interpeting response: ' . check_plain($res));
@@ -223,7 +223,7 @@ class RestClientBaseFormatter implements RestClientFormatter {
   const FORMAT_PHP = 'php';
   const FORMAT_JSON = 'json';
 
-  private $format;
+  protected $format;
 
   public function __construct($format=self::FORMAT_PHP) {
     $this->format = $format;
