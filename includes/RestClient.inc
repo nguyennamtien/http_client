@@ -156,21 +156,35 @@ class RestClient {
     $this->lastError = curl_error($ch);
     curl_close($ch);
 
-    if ($response->responseCode==200) {
+    $result = NULL;
+
+    if ($response->responseCode == 200) {
       if ($this->formatter) {
-        return $this->formatter->unserialize($response->body);
+        try {
+          $result = $this->formatter->unserialize($response->body);
+        }
+        catch (Exception $e) {
+          throw new RestClientException('Failed to unserialize response', 0, $response, $e);
+        }
       }
-      return $response->body;
+      else {
+        $result = $response->body;
+      }
     }
-    // Deal with errors.
-    if (empty($response->rawResponse) && !empty($this->lastError)) {
-      throw new Exception('Curl Error: ' . $this->lastError);
+    // Deal with curl errors.
+    else if (empty($this->rawResponse) && !empty($this->lastError)) {
+      throw new RestClientException('Curl Error: ' . $this->lastError);
     }
     // Output any errors set by remote drupal sites.
     elseif (!empty($response->drupalErrors)) {
-      throw new Exception(check_plain(implode("\n", $response->drupalErrors)), $response->responseCode);
+      throw new RestClientException(check_plain(implode("\n", $response->drupalErrors)), $response->responseCode, $response);
     }
-    throw new Exception(check_plain($response->responseMessage), $response->responseCode);
+    // Treat all remaining non-200 responses as errors
+    else {
+      throw new RestClientException(check_plain($response->responseMessage), $response->responseCode, $response);
+    }
+
+    return $result;
   }
 
   /**
@@ -179,7 +193,9 @@ class RestClient {
   protected function interpretResponse($response) {
     $split = preg_split('/\r\n\r\n/', $response, 2);
     if (!isset($split[1])) {
-      throw new Exception('Error interpreting response: ' . check_plain($response));
+      throw new RestClientException('Error interpreting response', 0, (object)array(
+        'rawResponse' => $response,
+      ));
     }
     list($headers, $body) = $split;
 
@@ -223,6 +239,26 @@ class RestClient {
     } else {
       return '';
     }
+  }
+}
+
+/**
+ * Exception that's used to pass information about the response when
+ * a operation fails.
+ */
+class RestClientException extends Exception {
+  protected $response;
+
+  public function __construct($message, $code = 0, $response = NULL, $exception = NULL) {
+    parent::__construct($message, $code, $exception);
+    $this->response = $response;
+  }
+
+  /**
+   * Gets the response object, if any.
+   */
+  public function getResponse() {
+    return clone $this->response;
   }
 }
 
