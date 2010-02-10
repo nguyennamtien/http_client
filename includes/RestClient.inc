@@ -295,7 +295,7 @@ class RestClientBaseFormatter implements RestClientFormatter {
         return serialize($data);
         break;
       case self::FORMAT_JSON:
-        return json_encode($data);
+        return drupal_json_encode($data);
         break;
     }
   }
@@ -319,7 +319,7 @@ class RestClientBaseFormatter implements RestClientFormatter {
         }
         break;
       case self::FORMAT_JSON:
-        return json_decode($data);
+        return drupal_json_decode($data);
         break;
     }
   }
