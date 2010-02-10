@@ -250,7 +250,7 @@ class RestClientException extends Exception {
   protected $response;
 
   public function __construct($message, $code = 0, $response = NULL, $exception = NULL) {
-    parent::__construct($message, $code, $exception);
+    parent::__construct($message, $code);
     $this->response = $response;
   }
 
