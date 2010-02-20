@@ -4,5 +4,6 @@ description = Provides a REST client for use with the services REST server
 package = Services
 files[] = includes/RestClient.inc
 files[] = includes/RestClientXMLFormatter.inc
+files[] = includes/HttpClientCurlDelegate.inc
 core = 7.x
 php = 5.x
